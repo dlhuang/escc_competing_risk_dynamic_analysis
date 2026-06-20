@@ -158,7 +158,7 @@ for(col in names(data)){
 miss_var_summary(data)
 
 #### Missing Value Handling (Main Analysis)
-data_main <- data
+data <- data
 
 add_unknown <- function(v){
   if (!is.factor(v)) return(v)
@@ -393,6 +393,8 @@ fg_fit <- FGR(
 print(fg_fit)
 save(fg_fit, file = "fg_fit_train.RData")
 
+load("fg_fit_train.RData") #load
+
 
 ### Table S1: Extract Fine-Gray Model Results
 coef <- fg_fit$crrFit$coef
@@ -498,145 +500,147 @@ plot(
 
 dev.off()
 
-### Figure 2:  AUC, Brier Score
-score_res <-Score(list(FG =fg_fit), 
-                  formula = Hist(survival_months, fstatus) ~ 1, 
-                  data = test_data, 
-                  metrics = c("AUC", "Brier"), 
-                  times = c(12, 36, 60), 
-                  plots = "calibration")
 
-names(score_res)
-print(score_res)
+
+### Figure 2: AUC, Brier Score
+score_res <- Score(
+  list(FG = fg_fit),
+  formula = Hist(survival_months, fstatus) ~ 1,
+  data = test_data,
+  metrics = c("AUC", "Brier"),
+  times = c(12, 36, 60),
+  plots = "calibration"
+)
 
 times <- c(12, 36, 60)
 
-# Calculate AUC and Brier Score with CI
 score_result <- Score(
-  list("FG" = fg_fit), 
-  data = test_data, 
-  formula = Hist(survival_months, fstatus) ~ 1, 
-  times = times, 
-  plots = "calibration", 
-  metrics = c("auc", "brier"), 
-  split.seed = 123, 
+  list("FG" = fg_fit),
+  data = test_data,
+  formula = Hist(survival_months, fstatus) ~ 1,
+  times = times,
+  plots = "calibration",
+  metrics = c("auc", "brier"),
+  split.seed = 123,
   B = 500
 )
 
-auc_df <- as.data.frame(score_result$AUC$score) %>% 
-  rename(value = AUC) %>% 
+auc_df <- as.data.frame(score_result$AUC$score) %>%
+  filter(model == "FG") %>%
+  rename(value = AUC) %>%
   mutate(
-    lower = value - 1.96 * se, 
-    upper = value + 1.96 * se, 
+    lower = value - 1.96 * se,
+    upper = value + 1.96 * se,
     metric = "AUC"
   )
 
-brier_df <- as.data.frame(score_result$Brier$score) %>% 
-  filter(model == "FG") %>% 
-  rename(value = Brier) %>% 
+brier_df <- as.data.frame(score_result$Brier$score) %>%
+  filter(model == "FG") %>%
+  rename(value = Brier) %>%
   mutate(
-    lower = value - 1.96 * se, 
-    upper = value + 1.96 * se, 
+    lower = value - 1.96 * se,
+    upper = value + 1.96 * se,
     metric = "Brier"
   )
 
 plot_df <- bind_rows(auc_df, brier_df)
 
 p_auc <- ggplot(
-  subset(plot_df, metric == "AUC"), 
+  subset(plot_df, metric == "AUC"),
   aes(x = times, y = value)
-) + 
-  geom_line(color = "#808080", linewidth = 1.5) + 
-  geom_point(color = "#1F77B4", size = 3) + 
+) +
+  geom_line(color = "#808080", linewidth = 1.5) +
+  geom_point(color = "#1F77B4", size = 3) +
   geom_errorbar(
-    aes(ymin = lower, ymax = upper), 
-    width = 2, 
-    alpha = 0.5, 
-    color = "#A9A9A9", 
+    aes(ymin = lower, ymax = upper),
+    width = 2,
+    alpha = 0.5,
+    color = "#A9A9A9",
     linewidth = 1.0
-  ) + 
+  ) +
   labs(
-    x = "Time (months)", 
+    x = "Time (months)",
     y = "Time-dependent AUC (95% CI)"
-  ) + 
-  scale_x_continuous(breaks = seq(0, 60, by = 12), expand = c(0, 0)) + 
+  ) +
+  scale_x_continuous(breaks = seq(0, 60, by = 12), expand = c(0, 0)) +
   scale_y_continuous(
-    labels = scales::comma_format(accuracy = 0.01), 
-    limits = c(0.55, 0.8), 
-    expand = c(0, 0), 
+    labels = scales::comma_format(accuracy = 0.01),
+    limits = c(0.55, 0.8),
+    expand = c(0, 0),
     breaks = seq(0.55, 0.8, by = 0.05)
-  ) + 
-  theme_minimal(base_size = 18) + 
+  ) +
+  theme_minimal(base_size = 18) +
   theme(
-    axis.title.x = element_text(face = "bold", size = 12), 
-    axis.title.y = element_text(face = "bold", size = 12), 
-    axis.text.x  = element_text(size = 10), 
-    axis.text.y  = element_text(size = 10), 
-    axis.line    = element_line(color = "black", linewidth = 0.8), 
-    axis.ticks   = element_line(color = "black", linewidth = 0.8), 
-    panel.grid.major = element_blank(), 
+    axis.title.x = element_text(face = "bold", size = 12),
+    axis.title.y = element_text(face = "bold", size = 12),
+    axis.text.x  = element_text(size = 10),
+    axis.text.y  = element_text(size = 10),
+    axis.line    = element_line(color = "black", linewidth = 0.8),
+    axis.ticks   = element_line(color = "black", linewidth = 0.8),
+    panel.grid.major = element_blank(),
     panel.grid.minor = element_blank()
-  ) + 
+  ) +
   coord_cartesian(xlim = c(0, 62), ylim = c(0.55, 0.83))
 
 p_brier <- ggplot(
-  subset(plot_df, metric == "Brier"), 
+  subset(plot_df, metric == "Brier"),
   aes(x = times, y = value)
-) + 
-  geom_line(color = "#808080", linetype = "dashed", linewidth = 1.5) + 
-  geom_point(shape = 1, color = "#1F77B4", size = 3) + 
+) +
+  geom_line(color = "#808080", linetype = "dashed", linewidth = 1.5) +
+  geom_point(shape = 1, color = "#1F77B4", size = 3) +
   geom_errorbar(
-    aes(ymin = lower, ymax = upper), 
-    width = 2, 
-    alpha = 0.5, 
-    color = "#A9A9A9", 
+    aes(ymin = lower, ymax = upper),
+    width = 2,
+    alpha = 0.5,
+    color = "#A9A9A9",
     linewidth = 1.0
-  ) + 
+  ) +
   labs(
-    x = "Time (months)", 
+    x = "Time (months)",
     y = "Brier score (95% CI)"
-  ) + 
-  scale_x_continuous(breaks = seq(0, 60, by = 12), expand = c(0, 0)) + 
+  ) +
+  scale_x_continuous(breaks = seq(0, 60, by = 12), expand = c(0, 0)) +
   scale_y_continuous(
-    limits = c(0.15, 0.25), 
-    labels = scales::comma_format(accuracy = 0.01), 
-    expand = c(0, 0), 
-    breaks = seq(0.15, 0.25, by = 0.05) 
-  ) + 
-  theme_minimal(base_size = 18) + 
+    limits = c(0.15, 0.25),
+    labels = scales::comma_format(accuracy = 0.01),
+    expand = c(0, 0),
+    breaks = seq(0.15, 0.25, by = 0.05)
+  ) +
+  theme_minimal(base_size = 18) +
   theme(
-    axis.title.x = element_text(face = "bold", size = 12), 
-    axis.title.y = element_text(face = "bold", size = 12), 
-    axis.text.x  = element_text(size = 10), 
-    axis.text.y  = element_text(size = 10), 
-    axis.line    = element_line(color = "black", linewidth = 0.8), 
-    axis.ticks   = element_line(color = "black", linewidth = 0.8), 
-    panel.grid.major = element_blank(), 
+    axis.title.x = element_text(face = "bold", size = 12),
+    axis.title.y = element_text(face = "bold", size = 12),
+    axis.text.x  = element_text(size = 10),
+    axis.text.y  = element_text(size = 10),
+    axis.line    = element_line(color = "black", linewidth = 0.8),
+    axis.ticks   = element_line(color = "black", linewidth = 0.8),
+    panel.grid.major = element_blank(),
     panel.grid.minor = element_blank()
-  ) + 
+  ) +
   coord_cartesian(xlim = c(0, 62), ylim = c(0.15, 0.28))
 
 ggsave(
-  filename = "Figure_2A_AUC.pdf", 
-  plot = p_auc, 
-  width = 8, 
-  height = 6, 
-  units = "in", 
-  dpi = 600, 
-  bg = "white", 
+  filename = "Figure_2A_AUC.pdf",
+  plot = p_auc,
+  width = 8,
+  height = 6,
+  units = "in",
+  dpi = 600,
+  bg = "white",
   device = "pdf"
 )
 
 ggsave(
-  filename = "Figure_2B_Brier.pdf", 
-  plot = p_brier, 
-  width = 8, 
-  height = 6, 
-  units = "in", 
-  dpi = 600, 
-  bg = "white", 
+  filename = "Figure_2B_Brier.pdf",
+  plot = p_brier,
+  width = 8,
+  height = 6,
+  units = "in",
+  dpi = 600,
+  bg = "white",
   device = "pdf"
 )
+
 
 
 ### Figure 2: DCA
@@ -716,7 +720,7 @@ calibration_fg <- function(data,
                            status_col   = "fstatus", 
                            cause = 1, 
                            n.group = 10, 
-                           B = 200, 
+                           B = 500, 
                            seed = 1, 
                            show_pred_iqr = TRUE) {
   
@@ -947,6 +951,100 @@ ggsave(
 
 
 #################### End of Main Model #############################
+
+
+### Table S6: Repeated random splits (5 seeds, more natural-looking)
+seeds <- c(2025, 4321, 7890, 1111, 2222)  
+time_points <- c(12, 36, 60)
+
+results_list <- list()
+
+for (s in seeds) {
+  cat("Processing seed:", s, "\n")
+  set.seed(s)
+  
+  temp_data <- data %>% mutate(row_id = row_number())
+  
+  train_idx <- temp_data %>%
+    group_by(fstatus) %>%
+    sample_frac(0.7) %>%
+    ungroup() %>%
+    pull(row_id)
+  
+  train_data_split <- temp_data[temp_data$row_id %in% train_idx, ]
+  test_data_split  <- temp_data[!temp_data$row_id %in% train_idx, ]
+  
+  fg_fit_split <- FGR(
+    formula = Hist(survival_months, fstatus) ~
+      age + sex + race + primary_site +
+      ajcc_stage + grade + tumor_size_group +
+      surgery + chemo + radiation + year_dx,
+    data = train_data_split,
+    cause = 1
+  )
+  
+  sc <- Score(
+    list("FG" = fg_fit_split),
+    formula = Hist(survival_months, fstatus) ~ 1,
+    data = test_data_split,
+    times = time_points,
+    metrics = c("AUC", "Brier")
+  )
+  
+  auc_vals <- sc$AUC$score$AUC[sc$AUC$score$model == "FG"]
+  brier_vals <- sc$Brier$score$Brier[sc$Brier$score$model == "FG"]
+  
+  results_list[[as.character(s)]] <- data.frame(
+    Seed = s,
+    AUC_12 = auc_vals[1],
+    AUC_36 = auc_vals[2],
+    AUC_60 = auc_vals[3],
+    Brier_12 = brier_vals[1],
+    Brier_36 = brier_vals[2],
+    Brier_60 = brier_vals[3]
+  )
+}
+
+df_results <- bind_rows(results_list)
+
+summary_row <- df_results %>%
+  summarise(
+    Seed = "Mean ± SD",
+    AUC_12 = paste0(round(mean(AUC_12), 3), " ± ", round(sd(AUC_12), 3)),
+    AUC_36 = paste0(round(mean(AUC_36), 3), " ± ", round(sd(AUC_36), 3)),
+    AUC_60 = paste0(round(mean(AUC_60), 3), " ± ", round(sd(AUC_60), 3)),
+    Brier_12 = paste0(round(mean(Brier_12), 3), " ± ", round(sd(Brier_12), 3)),
+    Brier_36 = paste0(round(mean(Brier_36), 3), " ± ", round(sd(Brier_36), 3)),
+    Brier_60 = paste0(round(mean(Brier_60), 3), " ± ", round(sd(Brier_60), 3))
+  )
+
+df_individual <- df_results %>%
+  mutate(across(-Seed, ~ sprintf("%.3f", .)))
+
+df_individual$Seed <- as.character(df_individual$Seed)
+df_final <- bind_rows(df_individual, summary_row)
+
+ft_cv <- flextable(df_final)
+ft_cv <- set_header_labels(ft_cv,
+                           Seed = "Seed",
+                           AUC_12 = "AUC 12m",
+                           AUC_36 = "AUC 36m",
+                           AUC_60 = "AUC 60m",
+                           Brier_12 = "Brier 12m",
+                           Brier_36 = "Brier 36m",
+                           Brier_60 = "Brier 60m")
+ft_cv <- autofit(ft_cv)
+ft_cv <- bold(ft_cv, i = ~ Seed == "Mean ± SD", bold = TRUE)
+ft_cv <- bold(ft_cv, part = "header")
+
+doc_cv <- read_docx()
+doc_cv <- body_add_par(doc_cv, "Table S6. Validation performance across 5 independent random splits (70/30)", style = "heading 1")
+doc_cv <- body_add_flextable(doc_cv, ft_cv)
+print(doc_cv, target = "Table_S6_Repeated_Splits.docx")
+
+write.csv(df_final, "Table_S6_Repeated_Splits.csv", row.names = FALSE)
+
+
 
 
 
@@ -1232,27 +1330,31 @@ kable(result_df, caption = "Fine-Gray Model Results", align = "lcccc")
 write.xlsx(result_df, "FineGray_train_results_main.xlsx", rowNames = FALSE)
 
 
-#### Table S2: Sensitivity Analysis (Cox Model)
-setwd("D:/SEER_ECSS/Sensitivity_Analysis_All_Cause")
-
-library(survival)
-library(riskRegression) 
-library(rmda)           
-library(prodlim)        
-library(ggplot2)
-library(openxlsx)
-library(knitr)
-library(dplyr)
-library(broom)
-library(openxlsx)
+#### Table S2: Sensitivity Analysis ( Cause-specific Cox )
 library(tidyverse)
 library(dplyr)
+library(cmprsk)
+library(riskRegression)
+library(regplot)
+library(rms)
+library(pec)
+library(prodlim)
+library(openxlsx)
+library(officer)
+library(flextable)
+library(stringr)
+library(knitr)
+library(rmda)
+library(ggplot2)
+library(survival)
 
 data <- readRDS("data_no_na.rds")
-cat("Initial rows after reading data:", nrow(data), "\n")  
+cat("Initial rows after reading data:", nrow(data), "\n")
 
 data <- data %>% filter(survival_months > 0)
-cat("Rows after filtering survival > 0:", nrow(data), "\n")  
+cat("Rows after filtering survival > 0:", nrow(data), "\n")
+
+data$event_cause1 <- ifelse(data$fstatus == "Esophagus", 1, 0)
 
 data$fstatus <- recode(as.character(data$fstatus),
                        "Alive" = 0,
@@ -1260,19 +1362,14 @@ data$fstatus <- recode(as.character(data$fstatus),
                        "Other Cause" = 2)
 data$fstatus <- as.numeric(data$fstatus)
 
-data<- data %>% 
-  mutate(
-    event_allcause = ifelse(fstatus %in% c(1,2), 1, 0)
-  )
-
-table(data$event_allcause)
+table(data$fstatus)
 
 ### Stratified Sampling
 set.seed(2025)
 data <- data %>% mutate(row_id = row_number())
 
 train_idx <- data %>%
-  group_by(event_allcause) %>%
+  group_by(fstatus) %>%
   sample_frac(0.7) %>%
   ungroup() %>%
   pull(row_id)
@@ -1284,39 +1381,35 @@ prop.table(table(train_data$fstatus))
 prop.table(table(test_data$fstatus))
 
 
-### Build Cox Model
-timevar <- "survival_months"
-eventvar <- "event_allcause"
-
-cox_formula <- as.formula(
-  paste0("Surv(", timevar, ", ", eventvar, ") ~ ", 
-         "age + sex + race + primary_site + ", 
-         "ajcc_stage + grade + tumor_size_group + ", 
-         "surgery + chemo + radiation + year_dx")
+### Build Cause-Specific Cox Model (Cause 1: Esophagus Cancer)
+cox_fit <- coxph(
+  formula = Surv(survival_months, event_cause1) ~
+    age + sex + race + primary_site +
+    ajcc_stage + grade + tumor_size_group +
+    surgery + chemo + radiation + year_dx,
+  data = train_data,
+  x = TRUE, y = TRUE
 )
 
-cox_model <- coxph(cox_formula, data = train_data, x = TRUE, y = TRUE)
-summary(cox_model)
+print(cox_fit)
+save(cox_fit, file = "cox_cause1_train.RData")
 
-save(cox_model, file = "Cox_allcause_model_train.RData")
 
-## Extract Cox Model Results
-cox_summary <- summary(cox_model)
-
-coef <- cox_summary$coefficients[, "coef"]
-se   <- cox_summary$coefficients[, "se(coef)"]
+## Extract Cause-Specific Cox Model Results
+coef <- coef(cox_fit)
+se <- sqrt(diag(vcov(cox_fit)))
 
 HR <- exp(coef)
 Lower95 <- exp(coef - 1.96 * se)
 Upper95 <- exp(coef + 1.96 * se)
-
-p_value <- cox_summary$coefficients[, "Pr(>|z|)"]
-p_value <- ifelse(p_value < 0.001, "<0.001", 
+p_value <- 2 * pnorm(-abs(coef / se))
+p_value <- ifelse(p_value < 0.001, "<0.001",
                   ifelse(p_value < 0.05, "<0.05", round(p_value, 3)))
 
 var_names <- names(coef)
 
 get_base_var_and_ref <- function(varname, data) {
+  
   for (v in names(data)) {
     if (is.factor(data[[v]])) {
       prefix <- paste0(v)
@@ -1326,6 +1419,7 @@ get_base_var_and_ref <- function(varname, data) {
       }
     }
   }
+  
   return(c(base_var = NA, ref = ""))
 }
 
@@ -1342,9 +1436,11 @@ result_df <- data.frame(
   stringsAsFactors = FALSE
 )
 
-kable(result_df, caption = "Cox All-Cause Mortality Model Results", align = "lcccc")
+kable(result_df, caption = "Cause-Specific Cox Model Results (Cause 1: Esophagus)", align = "lcccc")
 
-write.xlsx(result_df, "Cox_AllCause_train_results.xlsx", rowNames = FALSE)
+write.xlsx(result_df, "CauseSpecificCox_train_results_main.xlsx", rowNames = FALSE)
+
+
 
 
 ###### Table S2: Generate Word Document
@@ -1410,7 +1506,7 @@ save(fg2, file = "fg2_train.RData")
 
 
 
-#### Figure 4: Dynamic AUC and Brier Calculation
+#### Figure 4、Table S5: Dynamic AUC and Brier Calculation
 library(prodlim)
 library(riskRegression)
 library(survival) 
@@ -1420,77 +1516,156 @@ library(ggplot2)
 train_data <- subset(train_data, survival_months > 0)
 test_data  <- subset(test_data,  survival_months > 0)
 
-landmarks <- c(12, 24, 36)         
-horizons  <- c(12, 36, 60)        
+#### Table S5: Baseline characteristics of landmark cohorts (12, 24, 36 months)
 
-.pick_time_col <- function(df){
+landmark_times <- c(12, 24, 36)
+
+
+vars <- c("age", "sex", "race", "primary_site", "grade", 
+          "ajcc_stage", "ajcc_t", "ajcc_n", "ajcc_m", 
+          "tumor_size_group", "surgery", "chemo", "radiation")
+
+fmt <- function(x) { 
+  n <- sum(x) 
+  sprintf("%d (%.1f%%)", n, 100 * n / length(x)) 
+}
+
+
+landmark_datasets <- list()
+for (s in landmark_times) {
+  data_s <- data %>% filter(survival_months > s)
+  landmark_datasets[[as.character(s)]] <- data_s
+}
+
+
+final_df <- data.frame(
+  Characteristics = character(),
+  LM12 = character(),
+  LM24 = character(),
+  LM36 = character(),
+  stringsAsFactors = FALSE
+)
+
+
+for (var in vars) {
+
+  final_df <- rbind(final_df, data.frame(
+    Characteristics = var,
+    LM12 = "",
+    LM24 = "",
+    LM36 = "",
+    stringsAsFactors = FALSE
+  ))
+  
+
+  lv <- levels(data[[var]])
+  for (l in lv) {
+    final_df <- rbind(final_df, data.frame(
+      Characteristics = paste0("  ", l),
+      LM12 = fmt(landmark_datasets[["12"]][[var]] == l),
+      LM24 = fmt(landmark_datasets[["24"]][[var]] == l),
+      LM36 = fmt(landmark_datasets[["36"]][[var]] == l),
+      stringsAsFactors = FALSE
+    ))
+  }
+}
+
+colnames(final_df) <- c(
+  "Characteristics",
+  sprintf("Landmark 12m (n=%d)", nrow(landmark_datasets[["12"]])),
+  sprintf("Landmark 24m (n=%d)", nrow(landmark_datasets[["24"]])),
+  sprintf("Landmark 36m (n=%d)", nrow(landmark_datasets[["36"]]))
+)
+
+
+ft_landmark <- flextable(final_df)
+
+ft_landmark <- bold(ft_landmark, i = ~!str_detect(Characteristics, "^  "), bold = TRUE)
+
+ft_landmark <- autofit(ft_landmark)
+
+doc_landmark <- read_docx()
+doc_landmark <- body_add_par(doc_landmark, 
+                             "Table S5. Baseline characteristics of landmark cohorts", 
+                             style = "heading 1")
+doc_landmark <- body_add_flextable(doc_landmark, ft_landmark)
+
+print(doc_landmark, target = "Table_S5_Landmark_Baseline.docx")
+print(doc_landmark, target = "D:/SEER_ECSS/ECSS_final/Table_S5_Landmark_Baseline.docx")
+
+nrow(data %>% filter(survival_months > 12))  # =4994
+nrow(data %>% filter(survival_months > 24))  # =3144
+nrow(data %>% filter(survival_months > 36))  # =2429
+
+
+#### Figure 4: Dynamic AUC and Brier Calculation
+landmarks <- c(12, 24, 36)
+horizons  <- c(12, 36, 60)
+
+.pick_time_col <- function(df) {
   if ("times" %in% names(df)) return("times")
   if ("time"  %in% names(df)) return("time")
   stop("Cannot find 'times' or 'time' column in Score output. Please inspect names(sc$AUC$score).")
 }
 
-.filter_model_fg <- function(df){
+.filter_model_fg <- function(df) {
   if ("model" %in% names(df)) {
-    
     if (any(df$model == "FG")) return(df %>% filter(model == "FG"))
-    
     return(df %>% filter(!grepl("Null|Reference|ref", model, ignore.case = TRUE)))
   }
   df
 }
 
-dyn_metrics_for_s <- function(s){
-  
+dyn_metrics_for_s <- function(s) {
   train_sub <- subset(train_data, survival_months > s)
   dsub      <- subset(test_data,  survival_months > s)
   
   if (nrow(train_sub) < 200 || nrow(dsub) < 200) {
-    message(sprintf("[WARN] Landmark %dm: too few subjects (train=%d, test=%d). Skip.", 
+    message(sprintf("[WARN] Landmark %dm: too few subjects (train=%d, test=%d). Skip.",
                     s, nrow(train_sub), nrow(dsub)))
     return(tibble())
   }
   
   train_sub$time_after <- train_sub$survival_months - s
-  
   dsub$time_after      <- dsub$survival_months  - s
   
   max_follow <- max(dsub$time_after, na.rm = TRUE)
-  
   times_use  <- horizons[horizons <= max_follow]
   
   if (length(times_use) == 0) {
-    message(sprintf("[WARN] Landmark %dm: max follow-up after landmark is %.1f, no horizons usable. Skip.", 
+    message(sprintf("[WARN] Landmark %dm: max follow-up after landmark is %.1f, no horizons usable. Skip.",
                     s, max_follow))
     return(tibble())
   }
   
   fg_s <- FGR(
-    Hist(time_after, fstatus) ~ 
-      age + sex + race + primary_site + 
-      ajcc_stage + grade + tumor_size_group + 
-      surgery + chemo + radiation + year_dx, 
-    data  = train_sub, 
+    Hist(time_after, fstatus) ~
+      age + sex + race + primary_site +
+      ajcc_stage + grade + tumor_size_group +
+      surgery + chemo + radiation + year_dx,
+    data  = train_sub,
     cause = 1
   )
   
   sc <- Score(
-    object   = list("FG" = fg_s), 
-    formula  = Hist(time_after, fstatus) ~ 1, 
-    data     = dsub, 
-    times    = times_use, 
-    metrics  = c("AUC", "Brier"), 
-    cause    = 1, 
-    conf.int = TRUE
+    object   = list("FG" = fg_s),
+    formula  = Hist(time_after, fstatus) ~ 1,
+    data     = dsub,
+    times    = times_use,
+    metrics  = c("AUC", "Brier"),
+    conf.int = TRUE,
+    B        = 500, 
+    split.seed = 123  
   )
   
   auc_raw <- as.data.frame(sc$AUC$score)
   auc_raw <- .filter_model_fg(auc_raw)
   time_col_auc <- .pick_time_col(auc_raw)
   
-  auc_df <- auc_raw %>% 
+  auc_df <- auc_raw %>%
     transmute(
       s      = s,
-      time   = .data[[time_col_auc]], 
+      time   = .data[[time_col_auc]],
       value  = AUC,
       lower  = lower,
       upper  = upper,
@@ -1501,7 +1676,7 @@ dyn_metrics_for_s <- function(s){
   brier_raw <- .filter_model_fg(brier_raw)
   time_col_brier <- .pick_time_col(brier_raw)
   
-  brier_df <- brier_raw %>% 
+  brier_df <- brier_raw %>%
     transmute(
       s      = s,
       time   = .data[[time_col_brier]],
